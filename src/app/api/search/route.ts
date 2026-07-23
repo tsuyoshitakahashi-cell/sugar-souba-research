@@ -35,7 +35,7 @@ const searchSchema = z
     stationCode: z.string().regex(/^\d{6}$/).optional(),
     prefCode: z.string().regex(/^\d{1,2}$/).optional(),
     cityCode: z.string().regex(/^\d{5}$/).optional(),
-    districtName: z.string().optional(), // 市区町村検索時のみ・任意
+    districtNames: z.array(z.string()).default([]), // 市区町村検索時のみ・複数選択可（空=市全体）
     propertyType: z.enum(["mansion", "house", "land"]),
     builtYearMin: z.number().int().min(1900).max(2100).optional(),
     builtYearMax: z.number().int().min(1900).max(2100).optional(),
@@ -60,8 +60,10 @@ export type SearchRequest = z.infer<typeof searchSchema>;
 // XPT001 の district_name_ja は「大船一丁目」のように丁目付きで返ることがあるため、
 // 選択された大字名との比較は丁目を落として行う（findDistrictCentroidと同じ正規化）。
 const CHOME_SUFFIX = /[一二三四五六七八九十０-９0-9]+丁目$/;
-function districtMatches(raw: string, target: string): boolean {
-  return raw === target || raw.replace(CHOME_SUFFIX, "") === target;
+// raw（XPT001の丁目付き地区名）が、選択された地区名のいずれかに一致するか
+function districtMatchesAny(raw: string, targets: string[]): boolean {
+  const stripped = raw.replace(CHOME_SUFFIX, "");
+  return targets.some((t) => raw === t || stripped === t);
 }
 
 export async function POST(req: NextRequest) {
@@ -96,15 +98,22 @@ export async function POST(req: NextRequest) {
       const tiles = tilesCoveringRadius(station.lng, station.lat, radius);
       features = await fetchPoints(tiles, quarters[0], quarters[quarters.length - 1], landTypeCodes, priceClassifications);
     } else {
-      // 市区町村検索: 地区が選ばれていればその地区centroid周辺、なければ市全体のbboxを取得
+      // 市区町村検索: 地区が選ばれていれば各地区centroid周辺を合算、なければ市全体のbboxを取得
       let tiles;
-      if (input.districtName) {
-        const centroid = findDistrictCentroid(input.cityCode!, input.districtName);
-        if (!centroid) {
+      if (input.districtNames.length > 0) {
+        const tileMap = new Map<string, { z: number; x: number; y: number }>();
+        for (const name of input.districtNames) {
+          const centroid = findDistrictCentroid(input.cityCode!, name);
+          if (!centroid) continue; // 引けない地区名はスキップ（下流のfeature側フィルタで担保）
+          const [lat, lng] = centroid;
+          for (const t of tilesCoveringRadius(lng, lat, DISTRICT_FETCH_RADIUS_METERS)) {
+            tileMap.set(`${t.z}/${t.x}/${t.y}`, t);
+          }
+        }
+        if (tileMap.size === 0) {
           return NextResponse.json({ error: "地区が見つかりません" }, { status: 400 });
         }
-        const [lat, lng] = centroid;
-        tiles = tilesCoveringRadius(lng, lat, DISTRICT_FETCH_RADIUS_METERS);
+        tiles = [...tileMap.values()];
       } else {
         const bounds = cityBounds(input.cityCode!);
         if (!bounds) {
@@ -122,7 +131,11 @@ export async function POST(req: NextRequest) {
       // タイルは矩形なので隣接市区町村の物件も混ざる。city_code（＋地区名）で厳密に絞る
       features = rawFeatures.filter((f) => {
         if (f.properties.city_code !== input.cityCode) return false;
-        if (input.districtName && !districtMatches(f.properties.district_name_ja, input.districtName)) return false;
+        if (
+          input.districtNames.length > 0 &&
+          !districtMatchesAny(f.properties.district_name_ja, input.districtNames)
+        )
+          return false;
         return true;
       });
     }

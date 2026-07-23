@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { groupKanagawaCities, type CityGroup } from "@/lib/kanagawa-cities";
 import type { SearchConditions } from "@/lib/search-types";
 import type { PropertyType } from "@/lib/reinfolib/types";
@@ -71,7 +74,9 @@ export function SearchForm({
   const [cityGroups, setCityGroups] = useState<CityGroup[]>([]);
   const [cityCode, setCityCode] = useState("");
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
-  const [districtName, setDistrictName] = useState(""); // ""=市全体
+  const [districtNames, setDistrictNames] = useState<string[]>([]); // 空=市全体
+  const [districtOpen, setDistrictOpen] = useState(false);
+  const districtRef = useRef<HTMLDivElement | null>(null);
 
   const [ageMin, setAgeMin] = useState(NONE);
   const [ageMax, setAgeMax] = useState(NONE);
@@ -109,6 +114,10 @@ export function SearchForm({
     setFloorPlans((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
   }
 
+  function toggleDistrict(d: string) {
+    setDistrictNames((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
+  }
+
   function savePreset() {
     const p: Preset = { propertyType, ageMin, ageMax, areaMin, areaMax, walkMaxMinutes, directions, floorPlans };
     localStorage.setItem(PRESET_KEY, JSON.stringify(p));
@@ -137,7 +146,8 @@ export function SearchForm({
 
   // 市が変わったら地区一覧を再取得し、地区選択はリセット
   useEffect(() => {
-    setDistrictName("");
+    setDistrictNames([]);
+    setDistrictOpen(false);
     if (!cityCode) {
       setDistrictOptions([]);
       return;
@@ -147,9 +157,28 @@ export function SearchForm({
       .then((d) => setDistrictOptions(d.districts ?? []));
   }, [cityCode]);
 
+  // 地区パネルの外側クリックで閉じる
+  useEffect(() => {
+    if (!districtOpen) return;
+    function onDown(e: MouseEvent) {
+      if (districtRef.current && !districtRef.current.contains(e.target as Node)) {
+        setDistrictOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [districtOpen]);
+
   const isLand = propertyType === "land";
   const currentYear = new Date().getFullYear();
   const canSearch = areaMode === "station" ? station !== null : cityCode !== "";
+
+  const districtLabel =
+    districtNames.length === 0
+      ? "市全体"
+      : districtNames.length === 1
+        ? districtNames[0]
+        : `${districtNames[0]} 他${districtNames.length - 1}件`;
 
   function handleSubmit() {
     if (!canSearch) return;
@@ -163,7 +192,7 @@ export function SearchForm({
         areaMode === "city"
           ? cityGroups.flatMap((g) => g.cities).find((c) => c.id === cityCode)?.name
           : undefined,
-      districtName: areaMode === "city" && districtName ? districtName : undefined,
+      districtNames: areaMode === "city" ? districtNames : [],
       propertyType,
       // 築N年〜M年 → 建築年レンジに変換（築が浅い=建築年が新しい）
       builtYearMin: !isLand && ageMax !== NONE ? currentYear - Number(ageMax) : undefined,
@@ -181,50 +210,52 @@ export function SearchForm({
 
   return (
     <Card>
-      <CardContent className="space-y-5 pt-6">
-        <div className="flex flex-wrap items-start gap-5">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">エリア</p>
-            <Tabs value={areaMode} onValueChange={(v) => setAreaMode(v as "station" | "city")}>
-              <TabsList>
-                <TabsTrigger value="station">駅から探す</TabsTrigger>
-                <TabsTrigger value="city">市区町村から探す</TabsTrigger>
-              </TabsList>
-            </Tabs>
-            {areaMode === "station" ? (
-              <div className="relative w-72">
-                <Input
-                  value={stationQuery}
-                  onChange={(e) => {
-                    setStationQuery(e.target.value);
-                    setStation(null);
-                  }}
-                  placeholder="駅名を入力（例: 大船）"
-                />
-                {stationHits.length > 0 && (
-                  <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover shadow-md">
-                    {stationHits.map((s) => (
-                      <li key={s.code}>
-                        <button
-                          type="button"
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-                          onClick={() => {
-                            setStation(s);
-                            setStationQuery(s.name);
-                            setStationHits([]);
-                          }}
-                        >
-                          <span className="font-medium">{s.name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {s.lines.slice(0, 3).join("・")}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : (
+      <CardContent className="space-y-6 pt-6">
+        {/* ── エリア ── */}
+        <section className="space-y-3">
+          <p className="text-sm font-semibold text-foreground">エリア</p>
+          <Tabs value={areaMode} onValueChange={(v) => setAreaMode(v as "station" | "city")}>
+            <TabsList>
+              <TabsTrigger value="station">駅から探す</TabsTrigger>
+              <TabsTrigger value="city">市区町村から探す</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {areaMode === "station" ? (
+            <div className="relative w-full max-w-sm">
+              <Input
+                value={stationQuery}
+                onChange={(e) => {
+                  setStationQuery(e.target.value);
+                  setStation(null);
+                }}
+                placeholder="駅名を入力（例: 大船）"
+              />
+              {stationHits.length > 0 && (
+                <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover shadow-md">
+                  {stationHits.map((s) => (
+                    <li key={s.code}>
+                      <button
+                        type="button"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                        onClick={() => {
+                          setStation(s);
+                          setStationQuery(s.name);
+                          setStationHits([]);
+                        }}
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {s.lines.slice(0, 3).join("・")}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
                   神奈川県
@@ -248,30 +279,92 @@ export function SearchForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <Select
-                  value={districtName || NONE}
-                  onValueChange={(v) => v && setDistrictName(v === NONE ? "" : v)}
-                  disabled={!cityCode}
-                >
-                  <SelectTrigger className="w-44">
-                    <SelectValue>{districtName || "市全体"}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>市全体</SelectItem>
-                    {districtOptions.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
 
+                {/* 地区（複数選択） */}
+                <div className="relative" ref={districtRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!cityCode}
+                    onClick={() => setDistrictOpen((o) => !o)}
+                    className="w-52 justify-between font-normal"
+                  >
+                    <span className="truncate">{districtLabel}</span>
+                    <ChevronDownIcon className="size-4 shrink-0 opacity-60" />
+                  </Button>
+                  {districtOpen && (
+                    <div className="absolute z-20 mt-1 w-64 rounded-md border bg-popover shadow-md">
+                      <div className="flex items-center justify-between border-b px-3 py-1.5 text-xs text-muted-foreground">
+                        <span>{districtNames.length}地区を選択中</span>
+                        {districtNames.length > 0 && (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => setDistrictNames([])}
+                          >
+                            すべて解除
+                          </button>
+                        )}
+                      </div>
+                      <ul className="max-h-64 overflow-auto py-1">
+                        {districtOptions.map((d) => {
+                          const active = districtNames.includes(d);
+                          return (
+                            <li key={d}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                                onClick={() => toggleDistrict(d)}
+                              >
+                                <span
+                                  className={cn(
+                                    "flex size-4 shrink-0 items-center justify-center rounded border",
+                                    active
+                                      ? "border-primary bg-primary text-primary-foreground"
+                                      : "border-input",
+                                  )}
+                                >
+                                  {active && <CheckIcon className="size-3" />}
+                                </span>
+                                {d}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {districtNames.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {districtNames.map((d) => (
+                    <Badge key={d} variant="secondary" className="gap-1 pr-1">
+                      {d}
+                      <button
+                        type="button"
+                        aria-label={`${d}を外す`}
+                        className="rounded-full px-1 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+                        onClick={() => toggleDistrict(d)}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+
+        <div className="border-t" />
+
+        {/* ── 絞り込み条件 ── */}
+        <section className="space-y-5">
           <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">種別</p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {PROPERTY_TYPES.map((t) => (
                 <Button
                   key={t.value}
@@ -291,87 +384,88 @@ export function SearchForm({
             )}
           </div>
 
-          {!isLand && (
+          <div className="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+            {!isLand && (
+              <RangeSelect
+                label="築年数"
+                unit="年"
+                options={AGE_OPTIONS}
+                min={ageMin}
+                max={ageMax}
+                onMin={setAgeMin}
+                onMax={setAgeMax}
+              />
+            )}
             <RangeSelect
-              label="築年数"
-              unit="年"
-              options={AGE_OPTIONS}
-              min={ageMin}
-              max={ageMax}
-              onMin={setAgeMin}
-              onMax={setAgeMax}
+              label="面積"
+              unit="㎡"
+              options={AREA_OPTIONS}
+              min={areaMin}
+              max={areaMax}
+              onMin={setAreaMin}
+              onMax={setAreaMax}
             />
-          )}
-          <RangeSelect
-            label="面積"
-            unit="㎡"
-            options={AREA_OPTIONS}
-            min={areaMin}
-            max={areaMax}
-            onMin={setAreaMin}
-            onMax={setAreaMax}
-          />
-
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground">最寄駅からの徒歩（概算）</p>
-            <Select value={walkMaxMinutes} onValueChange={(v) => v && setWalkMaxMinutes(v)}>
-              <SelectTrigger className="w-32">
-                <SelectValue>{walkMaxMinutes === WALK_NONE ? "指定なし" : `${walkMaxMinutes}分以内`}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={WALK_NONE}>指定なし</SelectItem>
-                {WALK_OPTIONS.map((w) => (
-                  <SelectItem key={w} value={String(w)}>
-                    {w}分以内
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">最寄駅からの徒歩（概算）</p>
+              <Select value={walkMaxMinutes} onValueChange={(v) => v && setWalkMaxMinutes(v)}>
+                <SelectTrigger className="w-36">
+                  <SelectValue>{walkMaxMinutes === WALK_NONE ? "指定なし" : `${walkMaxMinutes}分以内`}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={WALK_NONE}>指定なし</SelectItem>
+                  {WALK_OPTIONS.map((w) => (
+                    <SelectItem key={w} value={String(w)}>
+                      {w}分以内
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-foreground">
-            間取り<span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝絞らない</span>
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {FLOOR_PLANS.map((f) => (
-              <Button
-                key={f}
-                type="button"
-                variant={floorPlans.includes(f) ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleFloorPlan(f)}
-              >
-                {f}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {areaMode === "station" && (
           <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">
-              方角（駅から見た向き）
-              <span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝全方位</span>
+              間取り<span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝絞らない</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {DIRECTIONS.map((d) => (
+              {FLOOR_PLANS.map((f) => (
                 <Button
-                  key={d}
+                  key={f}
                   type="button"
-                  variant={directions.includes(d) ? "default" : "outline"}
+                  variant={floorPlans.includes(f) ? "default" : "outline"}
                   size="sm"
-                  onClick={() => toggleDirection(d)}
+                  onClick={() => toggleFloorPlan(f)}
                 >
-                  {d}
+                  {f}
                 </Button>
               ))}
             </div>
           </div>
-        )}
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {areaMode === "station" && (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">
+                方角（駅から見た向き）
+                <span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝全方位</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {DIRECTIONS.map((d) => (
+                  <Button
+                    key={d}
+                    type="button"
+                    variant={directions.includes(d) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleDirection(d)}
+                  >
+                    {d}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <div className="flex flex-wrap items-center gap-3 border-t pt-4">
           <Button onClick={handleSubmit} disabled={!canSearch || searching} size="lg">
             {searching ? "国交省データを取得中…" : "相場を調べる"}
           </Button>

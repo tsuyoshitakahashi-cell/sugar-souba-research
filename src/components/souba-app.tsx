@@ -104,7 +104,7 @@ export function SoubaApp() {
                 <ExpandButtons conditions={conditions} meta={result.meta} onExpand={search} />
               )}
 
-              <PriceCharts deals={result.deals} />
+              <PriceCharts deals={result.deals} isStationSearch={result.meta.isStationSearch} />
               <DealsTable
                 deals={result.deals}
                 representatives={result.representatives}

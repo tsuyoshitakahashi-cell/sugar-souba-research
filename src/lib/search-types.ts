@@ -9,7 +9,7 @@ export interface SearchConditions {
   prefCode?: string;
   cityCode?: string;
   cityLabel?: string;
-  districtName?: string; // 市区町村検索時のみ・任意（未指定=市全体）
+  districtNames: string[]; // 市区町村検索時のみ・複数選択可（空=市全体）
   propertyType: PropertyType;
   builtYearMin?: number;
   builtYearMax?: number;
