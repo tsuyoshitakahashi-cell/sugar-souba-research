@@ -17,12 +17,6 @@ export async function POST(req: NextRequest) {
   const passcode = process.env.APP_PASSCODE;
   const secret = process.env.SESSION_SECRET;
   if (!passcode || !secret) {
-    // 診断: どの環境変数が欠けているかを有無のみログに出す（値は出さない）
-    console.error("auth env check", {
-      hasPasscode: !!passcode,
-      hasSecret: !!secret,
-      envKeys: Object.keys(process.env).filter((k) => /PASSCODE|SESSION|REINFOLIB/.test(k)),
-    });
     return NextResponse.json({ error: "サーバ設定が不完全です" }, { status: 500 });
   }
 
