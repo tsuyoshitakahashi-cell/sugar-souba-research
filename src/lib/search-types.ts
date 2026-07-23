@@ -13,8 +13,10 @@ export interface SearchConditions {
   propertyType: PropertyType;
   builtYearMin?: number;
   builtYearMax?: number;
-  areaMin?: number;
+  areaMin?: number; // マンション=専有面積 / 戸建・土地=土地面積
   areaMax?: number;
+  buildingAreaMin?: number; // 戸建の建物延床面積（戸建選択時のみ）
+  buildingAreaMax?: number;
   floorPlans: string[]; // 例 ["3LDK"]。空=絞らない
   walkMaxMinutes: 5 | 10 | 15 | 20 | 30 | null; // null=徒歩で絞らない。両モード共通
   directions: string[]; // 空=全方位（駅検索時のみ有効）

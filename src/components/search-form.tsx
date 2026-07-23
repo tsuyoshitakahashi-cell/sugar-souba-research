@@ -43,7 +43,7 @@ const DIRECTIONS = ["北", "北東", "東", "南東", "南", "南西", "西", "�
 const FLOOR_PLANS = ["1R", "1K", "1DK", "1LDK", "2DK", "2LDK", "3DK", "3LDK", "4LDK", "5LDK"] as const;
 const NONE = "none";
 const WALK_NONE = "none";
-const PRESET_KEY = "souba-preset-v2";
+const PRESET_KEY = "souba-preset-v3";
 
 interface Preset {
   propertyType: PropertyType;
@@ -51,6 +51,8 @@ interface Preset {
   ageMax: string;
   areaMin: string;
   areaMax: string;
+  buildingAreaMin: string;
+  buildingAreaMax: string;
   walkMaxMinutes: string;
   directions: string[];
   floorPlans: string[];
@@ -82,6 +84,8 @@ export function SearchForm({
   const [ageMax, setAgeMax] = useState(NONE);
   const [areaMin, setAreaMin] = useState(NONE);
   const [areaMax, setAreaMax] = useState(NONE);
+  const [buildingAreaMin, setBuildingAreaMin] = useState(NONE);
+  const [buildingAreaMax, setBuildingAreaMax] = useState(NONE);
   const [walkMaxMinutes, setWalkMaxMinutes] = useState<string>("20");
   const [directions, setDirections] = useState<string[]>([]);
   const [floorPlans, setFloorPlans] = useState<string[]>([]);
@@ -98,6 +102,8 @@ export function SearchForm({
       setAgeMax(p.ageMax);
       setAreaMin(p.areaMin);
       setAreaMax(p.areaMax);
+      setBuildingAreaMin(p.buildingAreaMin ?? NONE);
+      setBuildingAreaMax(p.buildingAreaMax ?? NONE);
       setWalkMaxMinutes(p.walkMaxMinutes);
       setDirections(p.directions);
       setFloorPlans(p.floorPlans ?? []);
@@ -119,7 +125,18 @@ export function SearchForm({
   }
 
   function savePreset() {
-    const p: Preset = { propertyType, ageMin, ageMax, areaMin, areaMax, walkMaxMinutes, directions, floorPlans };
+    const p: Preset = {
+      propertyType,
+      ageMin,
+      ageMax,
+      areaMin,
+      areaMax,
+      buildingAreaMin,
+      buildingAreaMax,
+      walkMaxMinutes,
+      directions,
+      floorPlans,
+    };
     localStorage.setItem(PRESET_KEY, JSON.stringify(p));
     setPresetSaved(true);
     setTimeout(() => setPresetSaved(false), 2000);
@@ -170,6 +187,7 @@ export function SearchForm({
   }, [districtOpen]);
 
   const isLand = propertyType === "land";
+  const isHouse = propertyType === "house";
   const currentYear = new Date().getFullYear();
   const canSearch = areaMode === "station" ? station !== null : cityCode !== "";
 
@@ -199,6 +217,8 @@ export function SearchForm({
       builtYearMax: !isLand && ageMin !== NONE ? currentYear - Number(ageMin) : undefined,
       areaMin: areaMin !== NONE ? Number(areaMin) : undefined,
       areaMax: areaMax !== NONE ? Number(areaMax) : undefined,
+      buildingAreaMin: isHouse && buildingAreaMin !== NONE ? Number(buildingAreaMin) : undefined,
+      buildingAreaMax: isHouse && buildingAreaMax !== NONE ? Number(buildingAreaMax) : undefined,
       floorPlans,
       walkMaxMinutes:
         walkMaxMinutes === WALK_NONE ? null : (Number(walkMaxMinutes) as SearchConditions["walkMaxMinutes"]),
@@ -397,7 +417,7 @@ export function SearchForm({
               />
             )}
             <RangeSelect
-              label="面積"
+              label={isHouse ? "土地面積" : "面積"}
               unit="㎡"
               options={AREA_OPTIONS}
               min={areaMin}
@@ -405,6 +425,17 @@ export function SearchForm({
               onMin={setAreaMin}
               onMax={setAreaMax}
             />
+            {isHouse && (
+              <RangeSelect
+                label="建物延床面積"
+                unit="㎡"
+                options={AREA_OPTIONS}
+                min={buildingAreaMin}
+                max={buildingAreaMax}
+                onMin={setBuildingAreaMin}
+                onMax={setBuildingAreaMax}
+              />
+            )}
             <div className="space-y-2">
               <p className="text-sm font-semibold text-foreground">最寄駅からの徒歩（概算）</p>
               <Select value={walkMaxMinutes} onValueChange={(v) => v && setWalkMaxMinutes(v)}>

@@ -58,8 +58,10 @@ export interface DealFilter {
   type: string;
   builtYearMin?: number;
   builtYearMax?: number;
-  areaMin?: number;
+  areaMin?: number; // 土地面積/専有面積
   areaMax?: number;
+  buildingAreaMin?: number; // 戸建の建物延床面積
+  buildingAreaMax?: number;
   floorPlans?: string[]; // 半角正規化済みの間取り文字列（例 "3LDK"）。空/未指定なら絞らない
 }
 
@@ -68,6 +70,11 @@ export function filterDeals(deals: Deal[], f: DealFilter): Deal[] {
     if (d.type !== f.type) return false;
     if (f.areaMin !== undefined && d.area < f.areaMin) return false;
     if (f.areaMax !== undefined && d.area > f.areaMax) return false;
+    // 延床面積で絞る場合、延床が取れない物件（マンション・土地）は除外
+    if (f.buildingAreaMin !== undefined && (d.buildingArea === undefined || d.buildingArea < f.buildingAreaMin))
+      return false;
+    if (f.buildingAreaMax !== undefined && (d.buildingArea === undefined || d.buildingArea > f.buildingAreaMax))
+      return false;
     if (f.builtYearMin !== undefined || f.builtYearMax !== undefined) {
       if (d.builtYear === null) return false; // 築年条件がある場合、築年不明は除外
       if (f.builtYearMin !== undefined && d.builtYear < f.builtYearMin) return false;

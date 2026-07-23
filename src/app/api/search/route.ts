@@ -41,6 +41,8 @@ const searchSchema = z
     builtYearMax: z.number().int().min(1900).max(2100).optional(),
     areaMin: z.number().positive().optional(),
     areaMax: z.number().positive().optional(),
+    buildingAreaMin: z.number().positive().optional(),
+    buildingAreaMax: z.number().positive().optional(),
     floorPlans: z.array(z.string()).default([]),
     // 徒歩フィルタは両モード共通。未指定(null)なら絞らない
     walkMaxMinutes: z
@@ -154,6 +156,8 @@ export async function POST(req: NextRequest) {
       builtYearMax: isLand ? undefined : input.builtYearMax,
       areaMin: input.areaMin,
       areaMax: input.areaMax,
+      buildingAreaMin: input.propertyType === "house" ? input.buildingAreaMin : undefined,
+      buildingAreaMax: input.propertyType === "house" ? input.buildingAreaMax : undefined,
       floorPlans: input.floorPlans,
     });
 

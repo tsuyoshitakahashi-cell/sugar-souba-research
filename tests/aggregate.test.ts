@@ -129,6 +129,29 @@ describe("filterDeals", () => {
     expect(r).toHaveLength(2);
     expect(filterDeals(withPlans, { type: "中古マンション等", floorPlans: [] })).toHaveLength(3);
   });
+  it("戸建は延床面積(buildingArea)でも絞れる", () => {
+    const houses = [
+      deal({ type: "宅地(土地と建物)", area: 120, buildingArea: 80 }),
+      deal({ type: "宅地(土地と建物)", area: 110, buildingArea: 100 }),
+      deal({ type: "宅地(土地と建物)", area: 90, buildingArea: 60 }),
+    ];
+    const r = filterDeals(houses, { type: "宅地(土地と建物)", buildingAreaMin: 80 });
+    expect(r).toHaveLength(2);
+    expect(r.every((d) => (d.buildingArea ?? 0) >= 80)).toBe(true);
+    // 延床は土地面積(area)とは独立して効く
+    const r2 = filterDeals(houses, { type: "宅地(土地と建物)", buildingAreaMax: 70 });
+    expect(r2).toHaveLength(1);
+    expect(r2[0].area).toBe(90);
+  });
+  it("延床面積で絞るとき延床不明（マンション等）は除外", () => {
+    const mixed = [
+      deal({ type: "中古マンション等", area: 70 }), // buildingArea undefined
+      deal({ type: "中古マンション等", area: 80, buildingArea: 75 }),
+    ];
+    const r = filterDeals(mixed, { type: "中古マンション等", buildingAreaMin: 50 });
+    expect(r).toHaveLength(1);
+    expect(r[0].buildingArea).toBe(75);
+  });
 });
 
 describe("median / summarize", () => {
