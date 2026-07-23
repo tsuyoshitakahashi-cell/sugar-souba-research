@@ -109,11 +109,15 @@ export function SoubaApp() {
                 deals={result.deals}
                 representatives={result.representatives}
                 mixedCategories={result.meta.priceClassifications.length > 1}
+                showWalk={result.meta.isStationSearch}
               />
             </>
           )}
 
-          <PriceNotice isLand={result.meta.landUsesUnsettledPrice} />
+          <PriceNotice
+            isLand={result.meta.landUsesUnsettledPrice}
+            isStation={result.meta.isStationSearch}
+          />
         </>
       )}
     </div>
@@ -190,21 +194,29 @@ function NoResult({
   );
 }
 
-function PriceNotice({ isLand }: { isLand: boolean }) {
+function PriceNotice({ isLand, isStation }: { isLand: boolean; isStation: boolean }) {
   return (
-    <div className="rounded-md border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
-      {isLand ? (
-        <>
-          【注意】土地は国土交通省の<strong>不動産取引価格情報</strong>
-          （アンケート等に基づく取引価格）です。成約価格データは提供されておらず、現在の売り出し価格とも異なります。
-        </>
-      ) : (
-        <>
-          【注意】表示している価格は<strong>成約価格</strong>
-          （実際に売れた価格）です。現在の売り出し価格とは異なります。
-        </>
+    <div className="space-y-1 rounded-md border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+      <p>
+        {isLand ? (
+          <>
+            【注意】土地は国土交通省の<strong>不動産取引価格情報</strong>
+            （アンケート等に基づく取引価格）です。成約価格データは提供されておらず、現在の売り出し価格とも異なります。
+          </>
+        ) : (
+          <>
+            【注意】表示している価格は<strong>成約価格</strong>
+            （実際に売れた価格）です。現在の売り出し価格とは異なります。
+          </>
+        )}
+      </p>
+      {isStation && (
+        <p>
+          【徒歩・方角について】駅からの徒歩分・方角は、物件が属する<strong>町丁目の中心地点</strong>
+          から駅までの直線距離による<strong>概算</strong>です。実際の徒歩ルート・物件位置とは異なります。
+        </p>
       )}
-      出典: 国土交通省 不動産情報ライブラリ
+      <p>出典: 国土交通省 不動産情報ライブラリ／位置参照情報</p>
     </div>
   );
 }

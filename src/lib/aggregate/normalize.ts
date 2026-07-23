@@ -13,6 +13,9 @@ export interface Deal {
   floorPlan: string;
   structure: string;
   period: string;
+  // 駅検索（XPT001）時のみ設定。市区町村検索（XIT001）では undefined
+  walkMinutes?: number; // 駅からの概算徒歩分（地区代表点の直線距離ベース）
+  direction?: string; // 駅から見た8方位
 }
 
 export function zenkakuToHankaku(s: string): string {

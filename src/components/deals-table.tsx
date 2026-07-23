@@ -14,7 +14,7 @@ import {
 import { builtYearLabel, manYen, unitManYen } from "@/lib/format";
 import type { Deal } from "@/lib/aggregate/normalize";
 
-type SortKey = "tradePrice" | "area" | "unitPrice" | "builtYear" | "period";
+type SortKey = "tradePrice" | "area" | "unitPrice" | "builtYear" | "period" | "walkMinutes";
 
 function dealKey(d: Deal): string {
   return [d.municipality, d.district, d.tradePrice, d.area, d.period, d.priceCategory].join("|");
@@ -24,10 +24,12 @@ export function DealsTable({
   deals,
   representatives,
   mixedCategories,
+  showWalk,
 }: {
   deals: Deal[];
   representatives: Deal[];
   mixedCategories: boolean;
+  showWalk: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("tradePrice");
   const [desc, setDesc] = useState(true);
@@ -77,6 +79,8 @@ export function DealsTable({
           <TableHeader>
             <TableRow>
               <TableHead>所在地</TableHead>
+              {showWalk && header("駅徒歩(概算)", "walkMinutes")}
+              {showWalk && <TableHead>方角</TableHead>}
               {header("価格", "tradePrice")}
               {header("面積", "area")}
               {header("㎡単価", "unitPrice")}
@@ -96,6 +100,12 @@ export function DealsTable({
                     {d.municipality}
                     {d.district}
                   </TableCell>
+                  {showWalk && (
+                    <TableCell className="whitespace-nowrap">
+                      {d.walkMinutes !== undefined ? `約${d.walkMinutes}分` : "—"}
+                    </TableCell>
+                  )}
+                  {showWalk && <TableCell className="whitespace-nowrap">{d.direction ?? "—"}</TableCell>}
                   <TableCell className="whitespace-nowrap font-medium">{manYen(d.tradePrice)}</TableCell>
                   <TableCell>{d.area}㎡</TableCell>
                   <TableCell className="whitespace-nowrap">{unitManYen(d.unitPrice)}</TableCell>

@@ -30,7 +30,20 @@ const PROPERTY_TYPES: { value: PropertyType; label: string }[] = [
 
 const AGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 50];
 const AREA_OPTIONS = [20, 30, 40, 50, 60, 70, 80, 100, 120, 150, 200];
+const WALK_OPTIONS = [5, 10, 15, 20, 30] as const;
+const DIRECTIONS = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"] as const;
 const NONE = "none";
+const PRESET_KEY = "souba-preset-v1";
+
+interface Preset {
+  propertyType: PropertyType;
+  ageMin: string;
+  ageMax: string;
+  areaMin: string;
+  areaMax: string;
+  walkMaxMinutes: number;
+  directions: string[];
+}
 
 export function SearchForm({
   onSearch,
@@ -55,6 +68,38 @@ export function SearchForm({
   const [ageMax, setAgeMax] = useState(NONE);
   const [areaMin, setAreaMin] = useState(NONE);
   const [areaMax, setAreaMax] = useState(NONE);
+  const [walkMaxMinutes, setWalkMaxMinutes] = useState<number>(20);
+  const [directions, setDirections] = useState<string[]>([]);
+  const [presetSaved, setPresetSaved] = useState(false);
+
+  // プリセット復元（初回のみ）
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw) as Preset;
+      setPropertyType(p.propertyType);
+      setAgeMin(p.ageMin);
+      setAgeMax(p.ageMax);
+      setAreaMin(p.areaMin);
+      setAreaMax(p.areaMax);
+      setWalkMaxMinutes(p.walkMaxMinutes);
+      setDirections(p.directions);
+    } catch {
+      // 壊れたプリセットは無視
+    }
+  }, []);
+
+  function toggleDirection(d: string) {
+    setDirections((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
+  }
+
+  function savePreset() {
+    const p: Preset = { propertyType, ageMin, ageMax, areaMin, areaMax, walkMaxMinutes, directions };
+    localStorage.setItem(PRESET_KEY, JSON.stringify(p));
+    setPresetSaved(true);
+    setTimeout(() => setPresetSaved(false), 2000);
+  }
 
   // 駅名オートコンプリート（300msデバウンス）
   useEffect(() => {
@@ -95,6 +140,8 @@ export function SearchForm({
       builtYearMax: !isLand && ageMin !== NONE ? currentYear - Number(ageMin) : undefined,
       areaMin: areaMin !== NONE ? Number(areaMin) : undefined,
       areaMax: areaMax !== NONE ? Number(areaMax) : undefined,
+      walkMaxMinutes: walkMaxMinutes as SearchConditions["walkMaxMinutes"],
+      directions: areaMode === "station" ? directions : [],
       periodYears: 3,
       includeUnsettled: false,
     });
@@ -219,11 +266,56 @@ export function SearchForm({
             onMin={setAreaMin}
             onMax={setAreaMax}
           />
+
+          {areaMode === "station" && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">駅からの徒歩（概算）</p>
+              <Select value={String(walkMaxMinutes)} onValueChange={(v) => v && setWalkMaxMinutes(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue>{walkMaxMinutes}分以内</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {WALK_OPTIONS.map((w) => (
+                    <SelectItem key={w} value={String(w)}>
+                      {w}分以内
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
-        <Button onClick={handleSubmit} disabled={!canSearch || searching} size="lg">
-          {searching ? "国交省データを取得中…" : "相場を調べる"}
-        </Button>
+        {areaMode === "station" && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">
+              方角（駅から見た向き・複数選択可）
+              <span className="ml-2 font-normal text-muted-foreground">未選択＝全方位</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {DIRECTIONS.map((d) => (
+                <Button
+                  key={d}
+                  type="button"
+                  variant={directions.includes(d) ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleDirection(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={handleSubmit} disabled={!canSearch || searching} size="lg">
+            {searching ? "国交省データを取得中…" : "相場を調べる"}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={savePreset}>
+            {presetSaved ? "✓ 保存しました" : "この条件を既定にする"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
