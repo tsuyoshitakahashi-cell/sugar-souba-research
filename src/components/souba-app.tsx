@@ -110,6 +110,7 @@ export function SoubaApp() {
                 representatives={result.representatives}
                 mixedCategories={result.meta.priceClassifications.length > 1}
                 isStationSearch={result.meta.isStationSearch}
+                propertyType={conditions.propertyType}
               />
             </>
           )}

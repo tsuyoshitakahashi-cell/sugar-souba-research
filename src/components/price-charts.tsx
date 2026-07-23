@@ -15,6 +15,18 @@ import {
 import type { Deal } from "@/lib/aggregate/normalize";
 import { median } from "@/lib/aggregate/summarize";
 
+// 棒の上に常時表示する値ラベル（ホバー不要）。recharts v3 では LabelList 子要素が
+// 描画されないケースがあるため、座標付きで呼ばれる label 関数で自前描画する。
+function barValueLabel(props: { x?: number; y?: number; width?: number; value?: number }) {
+  const { x = 0, y = 0, width = 0, value } = props;
+  if (value === undefined || value === null || value === 0) return <></>;
+  return (
+    <text x={x + width / 2} y={y - 6} textAnchor="middle" fontSize={11} fill="#334155">
+      {value.toLocaleString()}
+    </text>
+  );
+}
+
 const AGE_BUCKETS = [
   { label: "〜築10年", min: 0, max: 10 },
   { label: "築11〜20年", min: 11, max: 20 },
@@ -130,7 +142,7 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ageData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+              <BarChart data={ageData} margin={{ top: 24, right: 16, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="bucket" fontSize={11} />
                 <YAxis fontSize={12} width={40} />
@@ -141,7 +153,14 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
                     return `${label}（${b?.count}件）`;
                   }}
                 />
-                <Bar dataKey="unitPrice" name="㎡単価" fill="#45bcb4" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="unitPrice"
+                  name="㎡単価"
+                  fill="#45bcb4"
+                  radius={[4, 4, 0, 0]}
+                  label={barValueLabel as never}
+                  isAnimationActive={false}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -155,7 +174,7 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={floorPlanData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+              <BarChart data={floorPlanData} margin={{ top: 24, right: 16, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="plan" fontSize={11} interval={0} />
                 <YAxis
@@ -170,7 +189,14 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
                     return `${label}（${b?.count}件）`;
                   }}
                 />
-                <Bar dataKey="price" name="価格中央値" fill="#45bcb4" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="price"
+                  name="価格中央値"
+                  fill="#45bcb4"
+                  radius={[4, 4, 0, 0]}
+                  label={barValueLabel as never}
+                  isAnimationActive={false}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -186,7 +212,7 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={walkData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+              <BarChart data={walkData} margin={{ top: 24, right: 16, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="bucket" fontSize={11} interval={0} />
                 <YAxis fontSize={12} width={40} />
@@ -197,7 +223,14 @@ export function PriceCharts({ deals, isStationSearch }: { deals: Deal[]; isStati
                     return `${label}（${b?.count}件）`;
                   }}
                 />
-                <Bar dataKey="unitPrice" name="㎡単価" fill="#1e756f" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="unitPrice"
+                  name="㎡単価"
+                  fill="#1e756f"
+                  radius={[4, 4, 0, 0]}
+                  label={barValueLabel as never}
+                  isAnimationActive={false}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

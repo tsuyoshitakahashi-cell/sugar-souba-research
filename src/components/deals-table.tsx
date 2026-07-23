@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/table";
 import { builtYearLabel, manYen, unitManYen } from "@/lib/format";
 import type { Deal } from "@/lib/aggregate/normalize";
+import type { PropertyType } from "@/lib/reinfolib/types";
 
 type SortKey =
   | "tradePrice"
   | "area"
+  | "buildingArea"
   | "unitPrice"
   | "builtYear"
   | "period"
@@ -33,12 +35,15 @@ export function DealsTable({
   representatives,
   mixedCategories,
   isStationSearch,
+  propertyType,
 }: {
   deals: Deal[];
   representatives: Deal[];
   mixedCategories: boolean;
   isStationSearch: boolean;
+  propertyType: PropertyType;
 }) {
+  const isHouse = propertyType === "house";
   const [sortKey, setSortKey] = useState<SortKey>("tradePrice");
   const [desc, setDesc] = useState(true);
   const repKeys = useMemo(() => new Set(representatives.map(dealKey)), [representatives]);
@@ -94,7 +99,8 @@ export function DealsTable({
                 : header("最寄駅からの徒歩(概算)", "nearestStationWalk")}
               {isStationSearch && <TableHead>方角</TableHead>}
               {header("価格", "tradePrice")}
-              {header("面積", "area")}
+              {isHouse ? header("土地面積", "area") : header("面積", "area")}
+              {isHouse && header("延床面積", "buildingArea")}
               {header("㎡単価", "unitPrice")}
               {header("築年", "builtYear")}
               {header("間取り", "floorPlan")}
@@ -118,6 +124,9 @@ export function DealsTable({
                   {isStationSearch && <TableCell className="whitespace-nowrap">{d.direction ?? "—"}</TableCell>}
                   <TableCell className="whitespace-nowrap font-medium">{manYen(d.tradePrice)}</TableCell>
                   <TableCell>{d.area}㎡</TableCell>
+                  {isHouse && (
+                    <TableCell>{d.buildingArea !== undefined ? `${d.buildingArea}㎡` : "—"}</TableCell>
+                  )}
                   <TableCell className="whitespace-nowrap">{unitManYen(d.unitPrice)}</TableCell>
                   <TableCell className="whitespace-nowrap">{builtYearLabel(d.builtYear)}</TableCell>
                   <TableCell>{d.floorPlan || "—"}</TableCell>

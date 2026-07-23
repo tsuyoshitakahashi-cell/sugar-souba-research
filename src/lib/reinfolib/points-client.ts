@@ -17,7 +17,8 @@ export interface PointProps {
   city_name_ja: string;
   district_name_ja: string;
   u_transaction_price_total_ja: string; // 「1,900万円」
-  u_area_ja: string; // 「70㎡」
+  u_area_ja: string; // 「70㎡」（マンション=専有面積 / 戸建・土地=土地面積）
+  u_building_total_floor_area_ja?: string; // 「90㎡」（戸建の建物延床面積）
   u_construction_year_ja: string; // 「1988年」
   building_structure_name_ja: string;
   floor_plan_name_ja: string;

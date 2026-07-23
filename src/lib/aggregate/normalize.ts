@@ -7,7 +7,8 @@ export interface Deal {
   municipality: string;
   district: string;
   tradePrice: number; // 円
-  area: number; // ㎡
+  area: number; // ㎡（マンション=専有面積 / 戸建・土地=土地面積）
+  buildingArea?: number; // ㎡（戸建の建物延床面積。マンション・土地では未設定）
   unitPrice: number; // 円/㎡
   builtYear: number | null;
   floorPlan: string;

@@ -133,6 +133,17 @@ describe("normalizePoint", () => {
     expect(d?.floorPlan).toBe("3LDK");
     expect(d?.structure).toBe("RC");
   });
+  it("戸建は土地面積(area)と建物延床面積(buildingArea)を別々に持つ", () => {
+    const d = normalizePoint(
+      pointFeature({ land_type_name_ja: "宅地(土地と建物)", u_area_ja: "115㎡", u_building_total_floor_area_ja: "90㎡" }),
+    );
+    expect(d?.area).toBe(115);
+    expect(d?.buildingArea).toBe(90);
+  });
+  it("延床面積が空/欠損なら buildingArea は undefined（マンション等）", () => {
+    expect(normalizePoint(pointFeature({}))!.buildingArea).toBeUndefined();
+    expect(normalizePoint(pointFeature({ u_building_total_floor_area_ja: "" }))!.buildingArea).toBeUndefined();
+  });
 });
 
 describe("filterByWalkAndDirection", () => {

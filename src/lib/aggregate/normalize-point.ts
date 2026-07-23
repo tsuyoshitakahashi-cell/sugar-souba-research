@@ -44,6 +44,11 @@ export function normalizePoint(
   const tradePrice = parseYenFromManStr(p.u_transaction_price_total_ja);
   const area = parseAreaStr(p.u_area_ja);
   if (tradePrice === null || area === null || area <= 0) return null;
+  // 戸建（土地と建物）は建物延床面積を別途保持。マンション・土地では空→undefined
+  const buildingAreaParsed = p.u_building_total_floor_area_ja
+    ? parseAreaStr(p.u_building_total_floor_area_ja)
+    : null;
+  const buildingArea = buildingAreaParsed !== null && buildingAreaParsed > 0 ? buildingAreaParsed : undefined;
 
   const centroid = findDistrictCentroid(p.city_code, p.district_name_ja);
 
@@ -76,6 +81,7 @@ export function normalizePoint(
     district: p.district_name_ja,
     tradePrice,
     area,
+    buildingArea,
     unitPrice: tradePrice / area,
     builtYear: parseYearStr(p.u_construction_year_ja),
     floorPlan: zenkakuToHankaku(p.floor_plan_name_ja),
