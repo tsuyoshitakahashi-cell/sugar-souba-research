@@ -9,12 +9,14 @@ export interface SearchConditions {
   prefCode?: string;
   cityCode?: string;
   cityLabel?: string;
+  districtName?: string; // 市区町村検索時のみ・任意（未指定=市全体）
   propertyType: PropertyType;
   builtYearMin?: number;
   builtYearMax?: number;
   areaMin?: number;
   areaMax?: number;
-  walkMaxMinutes: 5 | 10 | 15 | 20 | 30;
+  floorPlans: string[]; // 例 ["3LDK"]。空=絞らない
+  walkMaxMinutes: 5 | 10 | 15 | 20 | 30 | null; // null=徒歩で絞らない。両モード共通
   directions: string[]; // 空=全方位（駅検索時のみ有効）
   periodYears: 3 | 5;
   includeUnsettled: boolean;

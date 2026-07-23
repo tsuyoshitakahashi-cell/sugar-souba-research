@@ -79,6 +79,7 @@ describe("zenkakuToHankaku", () => {
   it("全角英数を半角にする", () => {
     expect(zenkakuToHankaku("２ＬＤＫ")).toBe("2LDK");
     expect(zenkakuToHankaku("ＲＣ")).toBe("RC");
+    expect(zenkakuToHankaku("１ＬＤＫ＋Ｓ")).toBe("1LDK+S");
   });
 });
 
@@ -117,6 +118,16 @@ describe("filterDeals", () => {
   it("築年条件がなければ築年不明も含める", () => {
     const r = filterDeals(deals, { type: "中古マンション等" });
     expect(r).toHaveLength(3);
+  });
+  it("間取りは前方一致で絞る（3LDK+S 等の亜種も拾う）", () => {
+    const withPlans = [
+      deal({ floorPlan: "3LDK" }),
+      deal({ floorPlan: "3LDK+S" }),
+      deal({ floorPlan: "2LDK" }),
+    ];
+    const r = filterDeals(withPlans, { type: "中古マンション等", floorPlans: ["3LDK"] });
+    expect(r).toHaveLength(2);
+    expect(filterDeals(withPlans, { type: "中古マンション等", floorPlans: [] })).toHaveLength(3);
   });
 });
 

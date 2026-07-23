@@ -69,7 +69,7 @@ export function PriceCharts({ deals }: { deals: Deal[] }) {
                 }
                 labelFormatter={() => ""}
               />
-              <Scatter data={scatterData} fill="#2563eb" fillOpacity={0.6} />
+              <Scatter data={scatterData} fill="#1e756f" fillOpacity={0.55} />
             </ScatterChart>
           </ResponsiveContainer>
         </CardContent>
@@ -93,7 +93,7 @@ export function PriceCharts({ deals }: { deals: Deal[] }) {
                     return `${label}（${b?.count}件）`;
                   }}
                 />
-                <Bar dataKey="unitPrice" name="㎡単価" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="unitPrice" name="㎡単価" fill="#45bcb4" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

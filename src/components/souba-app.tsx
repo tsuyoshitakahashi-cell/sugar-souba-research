@@ -109,7 +109,7 @@ export function SoubaApp() {
                 deals={result.deals}
                 representatives={result.representatives}
                 mixedCategories={result.meta.priceClassifications.length > 1}
-                showWalk={result.meta.isStationSearch}
+                isStationSearch={result.meta.isStationSearch}
               />
             </>
           )}
@@ -210,12 +210,11 @@ function PriceNotice({ isLand, isStation }: { isLand: boolean; isStation: boolea
           </>
         )}
       </p>
-      {isStation && (
-        <p>
-          【徒歩・方角について】駅からの徒歩分・方角は、物件が属する<strong>町丁目の中心地点</strong>
-          から駅までの直線距離による<strong>概算</strong>です。実際の徒歩ルート・物件位置とは異なります。
-        </p>
-      )}
+      <p>
+        【最寄駅の徒歩について】最寄駅からの徒歩分{isStation && "・方角"}は、物件が属する
+        <strong>町丁目の中心地点</strong>から駅までの直線距離による<strong>概算</strong>
+        です。実際の徒歩ルート・物件位置とは異なります。
+      </p>
       <p>出典: 国土交通省 不動産情報ライブラリ／位置参照情報</p>
     </div>
   );

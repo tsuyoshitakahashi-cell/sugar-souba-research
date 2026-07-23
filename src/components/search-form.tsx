@@ -37,8 +37,10 @@ const AGE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 50];
 const AREA_OPTIONS = [20, 30, 40, 50, 60, 70, 80, 100, 120, 150, 200];
 const WALK_OPTIONS = [5, 10, 15, 20, 30] as const;
 const DIRECTIONS = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"] as const;
+const FLOOR_PLANS = ["1R", "1K", "1DK", "1LDK", "2DK", "2LDK", "3DK", "3LDK", "4LDK", "5LDK"] as const;
 const NONE = "none";
-const PRESET_KEY = "souba-preset-v1";
+const WALK_NONE = "none";
+const PRESET_KEY = "souba-preset-v2";
 
 interface Preset {
   propertyType: PropertyType;
@@ -46,8 +48,9 @@ interface Preset {
   ageMax: string;
   areaMin: string;
   areaMax: string;
-  walkMaxMinutes: number;
+  walkMaxMinutes: string;
   directions: string[];
+  floorPlans: string[];
 }
 
 export function SearchForm({
@@ -67,13 +70,16 @@ export function SearchForm({
 
   const [cityGroups, setCityGroups] = useState<CityGroup[]>([]);
   const [cityCode, setCityCode] = useState("");
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [districtName, setDistrictName] = useState(""); // ""=市全体
 
   const [ageMin, setAgeMin] = useState(NONE);
   const [ageMax, setAgeMax] = useState(NONE);
   const [areaMin, setAreaMin] = useState(NONE);
   const [areaMax, setAreaMax] = useState(NONE);
-  const [walkMaxMinutes, setWalkMaxMinutes] = useState<number>(20);
+  const [walkMaxMinutes, setWalkMaxMinutes] = useState<string>("20");
   const [directions, setDirections] = useState<string[]>([]);
+  const [floorPlans, setFloorPlans] = useState<string[]>([]);
   const [presetSaved, setPresetSaved] = useState(false);
 
   // プリセット復元（初回のみ）
@@ -89,6 +95,7 @@ export function SearchForm({
       setAreaMax(p.areaMax);
       setWalkMaxMinutes(p.walkMaxMinutes);
       setDirections(p.directions);
+      setFloorPlans(p.floorPlans ?? []);
     } catch {
       // 壊れたプリセットは無視
     }
@@ -98,8 +105,12 @@ export function SearchForm({
     setDirections((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
   }
 
+  function toggleFloorPlan(f: string) {
+    setFloorPlans((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
+  }
+
   function savePreset() {
-    const p: Preset = { propertyType, ageMin, ageMax, areaMin, areaMax, walkMaxMinutes, directions };
+    const p: Preset = { propertyType, ageMin, ageMax, areaMin, areaMax, walkMaxMinutes, directions, floorPlans };
     localStorage.setItem(PRESET_KEY, JSON.stringify(p));
     setPresetSaved(true);
     setTimeout(() => setPresetSaved(false), 2000);
@@ -124,6 +135,18 @@ export function SearchForm({
       .then((d) => setCityGroups(groupKanagawaCities(d.cities ?? [])));
   }, []);
 
+  // 市が変わったら地区一覧を再取得し、地区選択はリセット
+  useEffect(() => {
+    setDistrictName("");
+    if (!cityCode) {
+      setDistrictOptions([]);
+      return;
+    }
+    fetch(`/api/districts?city=${cityCode}`)
+      .then((r) => r.json())
+      .then((d) => setDistrictOptions(d.districts ?? []));
+  }, [cityCode]);
+
   const isLand = propertyType === "land";
   const currentYear = new Date().getFullYear();
   const canSearch = areaMode === "station" ? station !== null : cityCode !== "";
@@ -140,13 +163,16 @@ export function SearchForm({
         areaMode === "city"
           ? cityGroups.flatMap((g) => g.cities).find((c) => c.id === cityCode)?.name
           : undefined,
+      districtName: areaMode === "city" && districtName ? districtName : undefined,
       propertyType,
       // 築N年〜M年 → 建築年レンジに変換（築が浅い=建築年が新しい）
       builtYearMin: !isLand && ageMax !== NONE ? currentYear - Number(ageMax) : undefined,
       builtYearMax: !isLand && ageMin !== NONE ? currentYear - Number(ageMin) : undefined,
       areaMin: areaMin !== NONE ? Number(areaMin) : undefined,
       areaMax: areaMax !== NONE ? Number(areaMax) : undefined,
-      walkMaxMinutes: walkMaxMinutes as SearchConditions["walkMaxMinutes"],
+      floorPlans,
+      walkMaxMinutes:
+        walkMaxMinutes === WALK_NONE ? null : (Number(walkMaxMinutes) as SearchConditions["walkMaxMinutes"]),
       directions: areaMode === "station" ? directions : [],
       periodYears: 3,
       includeUnsettled: false,
@@ -155,10 +181,10 @@ export function SearchForm({
 
   return (
     <Card>
-      <CardContent className="space-y-4 pt-6">
-        <div className="flex flex-wrap items-start gap-4">
+      <CardContent className="space-y-5 pt-6">
+        <div className="flex flex-wrap items-start gap-5">
           <div className="space-y-2">
-            <p className="text-sm font-medium">エリア</p>
+            <p className="text-sm font-semibold text-foreground">エリア</p>
             <Tabs value={areaMode} onValueChange={(v) => setAreaMode(v as "station" | "city")}>
               <TabsList>
                 <TabsTrigger value="station">駅から探す</TabsTrigger>
@@ -199,12 +225,12 @@ export function SearchForm({
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
                   神奈川県
                 </span>
                 <Select value={cityCode} onValueChange={(v) => v && setCityCode(v)}>
-                  <SelectTrigger className="w-56">
+                  <SelectTrigger className="w-52">
                     <SelectValue placeholder="市区町村を選ぶ">
                       {cityGroups.flatMap((g) => g.cities).find((c) => c.id === cityCode)?.name ?? "市区町村を選ぶ"}
                     </SelectValue>
@@ -222,12 +248,29 @@ export function SearchForm({
                     ))}
                   </SelectContent>
                 </Select>
+                <Select
+                  value={districtName || NONE}
+                  onValueChange={(v) => v && setDistrictName(v === NONE ? "" : v)}
+                  disabled={!cityCode}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue>{districtName || "市全体"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>市全体</SelectItem>
+                    {districtOptions.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium">種別</p>
+            <p className="text-sm font-semibold text-foreground">種別</p>
             <div className="flex gap-2">
               {PROPERTY_TYPES.map((t) => (
                 <Button
@@ -269,30 +312,48 @@ export function SearchForm({
             onMax={setAreaMax}
           />
 
-          {areaMode === "station" && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">駅からの徒歩（概算）</p>
-              <Select value={String(walkMaxMinutes)} onValueChange={(v) => v && setWalkMaxMinutes(Number(v))}>
-                <SelectTrigger className="w-32">
-                  <SelectValue>{walkMaxMinutes}分以内</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {WALK_OPTIONS.map((w) => (
-                    <SelectItem key={w} value={String(w)}>
-                      {w}分以内
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">最寄駅からの徒歩（概算）</p>
+            <Select value={walkMaxMinutes} onValueChange={(v) => v && setWalkMaxMinutes(v)}>
+              <SelectTrigger className="w-32">
+                <SelectValue>{walkMaxMinutes === WALK_NONE ? "指定なし" : `${walkMaxMinutes}分以内`}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={WALK_NONE}>指定なし</SelectItem>
+                {WALK_OPTIONS.map((w) => (
+                  <SelectItem key={w} value={String(w)}>
+                    {w}分以内
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground">
+            間取り<span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝絞らない</span>
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {FLOOR_PLANS.map((f) => (
+              <Button
+                key={f}
+                type="button"
+                variant={floorPlans.includes(f) ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleFloorPlan(f)}
+              >
+                {f}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {areaMode === "station" && (
           <div className="space-y-2">
-            <p className="text-sm font-medium">
-              方角（駅から見た向き・複数選択可）
-              <span className="ml-2 font-normal text-muted-foreground">未選択＝全方位</span>
+            <p className="text-sm font-semibold text-foreground">
+              方角（駅から見た向き）
+              <span className="ml-2 font-normal text-muted-foreground">複数選択可・未選択＝全方位</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
               {DIRECTIONS.map((d) => (
@@ -310,7 +371,7 @@ export function SearchForm({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 pt-1">
           <Button onClick={handleSubmit} disabled={!canSearch || searching} size="lg">
             {searching ? "国交省データを取得中…" : "相場を調べる"}
           </Button>
@@ -342,7 +403,7 @@ function RangeSelect({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm font-medium">{label}</p>
+      <p className="text-sm font-semibold text-foreground">{label}</p>
       <div className="flex items-center gap-1">
         <Select value={min} onValueChange={(v) => v && onMin(v)}>
           <SelectTrigger className="w-28">

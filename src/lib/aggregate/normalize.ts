@@ -13,13 +13,18 @@ export interface Deal {
   floorPlan: string;
   structure: string;
   period: string;
-  // 駅検索（XPT001）時のみ設定。市区町村検索（XIT001）では undefined
-  walkMinutes?: number; // 駅からの概算徒歩分（地区代表点の直線距離ベース）
-  direction?: string; // 駅から見た8方位
+  // 駅検索時のみ設定: 検索駅からの距離・方位
+  walkMinutes?: number; // 検索駅からの概算徒歩分（地区代表点の直線距離ベース）
+  direction?: string; // 検索駅から見た8方位
+  // 全モード共通: 物件の最寄駅（XPT001のgeometryをstations.jsonで逆引き）
+  nearestStation?: string;
+  nearestStationWalk?: number; // 最寄駅からの概算徒歩分（地区代表点基準）
 }
 
 export function zenkakuToHankaku(s: string): string {
-  return s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+  return s
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/＋/g, "+");
 }
 
 export function parseBuildingYear(s: string): number | null {
@@ -54,6 +59,7 @@ export interface DealFilter {
   builtYearMax?: number;
   areaMin?: number;
   areaMax?: number;
+  floorPlans?: string[]; // 半角正規化済みの間取り文字列（例 "3LDK"）。空/未指定なら絞らない
 }
 
 export function filterDeals(deals: Deal[], f: DealFilter): Deal[] {
@@ -65,6 +71,10 @@ export function filterDeals(deals: Deal[], f: DealFilter): Deal[] {
       if (d.builtYear === null) return false; // 築年条件がある場合、築年不明は除外
       if (f.builtYearMin !== undefined && d.builtYear < f.builtYearMin) return false;
       if (f.builtYearMax !== undefined && d.builtYear > f.builtYearMax) return false;
+    }
+    // 「3LDK+S」等の亜種も拾えるよう前方一致で判定する
+    if (f.floorPlans && f.floorPlans.length > 0 && !f.floorPlans.some((fp) => d.floorPlan.startsWith(fp))) {
+      return false;
     }
     return true;
   });

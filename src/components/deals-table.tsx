@@ -14,7 +14,15 @@ import {
 import { builtYearLabel, manYen, unitManYen } from "@/lib/format";
 import type { Deal } from "@/lib/aggregate/normalize";
 
-type SortKey = "tradePrice" | "area" | "unitPrice" | "builtYear" | "period" | "walkMinutes";
+type SortKey =
+  | "tradePrice"
+  | "area"
+  | "unitPrice"
+  | "builtYear"
+  | "period"
+  | "walkMinutes"
+  | "nearestStationWalk"
+  | "floorPlan";
 
 function dealKey(d: Deal): string {
   return [d.municipality, d.district, d.tradePrice, d.area, d.period, d.priceCategory].join("|");
@@ -24,12 +32,12 @@ export function DealsTable({
   deals,
   representatives,
   mixedCategories,
-  showWalk,
+  isStationSearch,
 }: {
   deals: Deal[];
   representatives: Deal[];
   mixedCategories: boolean;
-  showWalk: boolean;
+  isStationSearch: boolean;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("tradePrice");
   const [desc, setDesc] = useState(true);
@@ -39,6 +47,7 @@ export function DealsTable({
     const arr = [...deals].sort((a, b) => {
       const va = a[sortKey] ?? -Infinity;
       const vb = b[sortKey] ?? -Infinity;
+      if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb, "ja");
       return va < vb ? -1 : va > vb ? 1 : 0;
     });
     return desc ? arr.reverse() : arr;
@@ -79,13 +88,16 @@ export function DealsTable({
           <TableHeader>
             <TableRow>
               <TableHead>所在地</TableHead>
-              {showWalk && header("駅徒歩(概算)", "walkMinutes")}
-              {showWalk && <TableHead>方角</TableHead>}
+              <TableHead>最寄駅</TableHead>
+              {isStationSearch
+                ? header("検索駅からの徒歩(概算)", "walkMinutes")
+                : header("最寄駅からの徒歩(概算)", "nearestStationWalk")}
+              {isStationSearch && <TableHead>方角</TableHead>}
               {header("価格", "tradePrice")}
               {header("面積", "area")}
               {header("㎡単価", "unitPrice")}
               {header("築年", "builtYear")}
-              <TableHead>間取り</TableHead>
+              {header("間取り", "floorPlan")}
               {header("時期", "period")}
               {mixedCategories && <TableHead>区分</TableHead>}
             </TableRow>
@@ -93,6 +105,7 @@ export function DealsTable({
           <TableBody>
             {sorted.map((d, i) => {
               const isRep = repKeys.has(dealKey(d));
+              const walk = isStationSearch ? d.walkMinutes : d.nearestStationWalk;
               return (
                 <TableRow key={`${dealKey(d)}-${i}`} className={isRep ? "bg-amber-50 dark:bg-amber-950/30" : ""}>
                   <TableCell className="whitespace-nowrap">
@@ -100,12 +113,9 @@ export function DealsTable({
                     {d.municipality}
                     {d.district}
                   </TableCell>
-                  {showWalk && (
-                    <TableCell className="whitespace-nowrap">
-                      {d.walkMinutes !== undefined ? `約${d.walkMinutes}分` : "—"}
-                    </TableCell>
-                  )}
-                  {showWalk && <TableCell className="whitespace-nowrap">{d.direction ?? "—"}</TableCell>}
+                  <TableCell className="whitespace-nowrap">{d.nearestStation ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap">{walk !== undefined ? `約${walk}分` : "—"}</TableCell>
+                  {isStationSearch && <TableCell className="whitespace-nowrap">{d.direction ?? "—"}</TableCell>}
                   <TableCell className="whitespace-nowrap font-medium">{manYen(d.tradePrice)}</TableCell>
                   <TableCell>{d.area}㎡</TableCell>
                   <TableCell className="whitespace-nowrap">{unitManYen(d.unitPrice)}</TableCell>

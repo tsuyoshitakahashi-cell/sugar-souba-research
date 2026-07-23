@@ -15,6 +15,9 @@ import {
   parseYenFromManStr,
 } from "@/lib/aggregate/normalize-point";
 import type { PointFeature } from "@/lib/reinfolib/points-client";
+import { findNearestStation, findStation } from "@/lib/stations/lookup";
+import { cityBounds, listDistricts } from "@/lib/districts/lookup";
+import { tilesCoveringBounds } from "@/lib/reinfolib/tiles";
 
 const OFUNA = { lng: 139.531334, lat: 35.353631 };
 
@@ -98,32 +101,100 @@ function pointFeature(overrides: Partial<PointFeature["properties"]>): PointFeat
 }
 
 describe("normalizePoint", () => {
-  it("町丁目centroidから距離・方位を付与する", () => {
-    const d = normalizePoint(pointFeature({}), OFUNA.lng, OFUNA.lat);
+  it("駅検索モード: 検索駅からの距離・方位を付与する", () => {
+    const d = normalizePoint(pointFeature({}), { lng: OFUNA.lng, lat: OFUNA.lat });
     expect(d?.tradePrice).toBe(30_000_000);
     expect(d?.unitPrice).toBe(500_000);
     expect(d?.walkMinutes).toBeGreaterThan(0);
     expect(d?.direction).toBeDefined();
   });
-  it("価格・面積欠損は捨てる", () => {
-    expect(normalizePoint(pointFeature({ u_transaction_price_total_ja: "" }), OFUNA.lng, OFUNA.lat)).toBeNull();
-  });
-  it("centroidが引けない町丁目は距離・方位が付かない", () => {
-    const d = normalizePoint(pointFeature({ city_code: "99999", district_name_ja: "存在しない町" }), OFUNA.lng, OFUNA.lat);
+  it("最寄駅名・最寄駅徒歩は検索モードに関わらず付与される（geometry=最寄駅座標から逆引き）", () => {
+    const d = normalizePoint(pointFeature({}));
+    expect(d?.nearestStation).toBe("大船");
+    expect(d?.nearestStationWalk).toBeGreaterThan(0);
+    // 市区町村検索（searchStation未指定）では検索駅基準の距離は付かない
     expect(d?.walkMinutes).toBeUndefined();
     expect(d?.direction).toBeUndefined();
+  });
+  it("価格・面積欠損は捨てる", () => {
+    expect(normalizePoint(pointFeature({ u_transaction_price_total_ja: "" }))).toBeNull();
+  });
+  it("centroidが引けない町丁目は距離系フィールドが付かない", () => {
+    const d = normalizePoint(pointFeature({ city_code: "99999", district_name_ja: "存在しない町" }), {
+      lng: OFUNA.lng,
+      lat: OFUNA.lat,
+    });
+    expect(d?.walkMinutes).toBeUndefined();
+    expect(d?.direction).toBeUndefined();
+    expect(d?.nearestStation).toBeUndefined();
+  });
+  it("全角の間取り・構造を半角に正規化する", () => {
+    const d = normalizePoint(pointFeature({ floor_plan_name_ja: "３ＬＤＫ", building_structure_name_ja: "ＲＣ" }));
+    expect(d?.floorPlan).toBe("3LDK");
+    expect(d?.structure).toBe("RC");
   });
 });
 
 describe("filterByWalkAndDirection", () => {
-  const base = normalizePoint(pointFeature({}), OFUNA.lng, OFUNA.lat)!;
-  it("徒歩上限で絞る", () => {
-    expect(filterByWalkAndDirection([{ ...base, walkMinutes: 25 }], { walkMaxMinutes: 20, directions: [] })).toHaveLength(0);
-    expect(filterByWalkAndDirection([{ ...base, walkMinutes: 10 }], { walkMaxMinutes: 20, directions: [] })).toHaveLength(1);
+  const base = normalizePoint(pointFeature({}), { lng: OFUNA.lng, lat: OFUNA.lat })!;
+  it("徒歩上限で絞る（駅検索モード）", () => {
+    const opts = { walkMaxMinutes: 20, directions: [], useSearchStationDistance: true };
+    expect(filterByWalkAndDirection([{ ...base, walkMinutes: 25 }], opts)).toHaveLength(0);
+    expect(filterByWalkAndDirection([{ ...base, walkMinutes: 10 }], opts)).toHaveLength(1);
+  });
+  it("徒歩なし(null)なら距離不明でも通す", () => {
+    const opts = { walkMaxMinutes: undefined, directions: [], useSearchStationDistance: true };
+    expect(filterByWalkAndDirection([{ ...base, walkMinutes: undefined }], opts)).toHaveLength(1);
+  });
+  it("市区町村モードは最寄駅距離(nearestStationWalk)で絞る", () => {
+    const opts = { walkMaxMinutes: 10, directions: [], useSearchStationDistance: false };
+    expect(filterByWalkAndDirection([{ ...base, nearestStationWalk: 5 }], opts)).toHaveLength(1);
+    expect(filterByWalkAndDirection([{ ...base, nearestStationWalk: 15 }], opts)).toHaveLength(0);
   });
   it("方角で絞る（空なら全通過）", () => {
-    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], { walkMaxMinutes: 30, directions: ["南"] })).toHaveLength(0);
-    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], { walkMaxMinutes: 30, directions: [] })).toHaveLength(1);
-    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], { walkMaxMinutes: 30, directions: ["北", "北東"] })).toHaveLength(1);
+    const opts = (directions: string[]) => ({ walkMaxMinutes: 30, directions, useSearchStationDistance: true });
+    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], opts(["南"]))).toHaveLength(0);
+    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], opts([]))).toHaveLength(1);
+    expect(filterByWalkAndDirection([{ ...base, direction: "北" }], opts(["北", "北東"]))).toHaveLength(1);
+  });
+});
+
+describe("findNearestStation", () => {
+  it("駅の座標そのものは自駅に一致する", () => {
+    const kamakura = findStation("005055")!;
+    const r = findNearestStation(kamakura.lng, kamakura.lat);
+    expect(r?.station.name).toBe("鎌倉");
+    expect(r?.meters).toBeCloseTo(0, 0);
+  });
+  it("遠く離れた座標（海外相当）は一致なし", () => {
+    expect(findNearestStation(0, 0)).toBeNull();
+  });
+});
+
+describe("listDistricts / cityBounds", () => {
+  it("藤沢市(14205)の地区一覧が取れる", () => {
+    const ds = listDistricts("14205");
+    expect(ds.length).toBeGreaterThan(50);
+    expect(ds).toContain("鵠沼海岸");
+  });
+  it("存在しない市はゼロ件・null", () => {
+    expect(listDistricts("99999")).toHaveLength(0);
+    expect(cityBounds("99999")).toBeNull();
+  });
+  it("市のbboxは妥当な緯度経度範囲を返す", () => {
+    const b = cityBounds("14205")!;
+    expect(b.minLat).toBeLessThan(b.maxLat);
+    expect(b.minLng).toBeLessThan(b.maxLng);
+    expect(b.minLat).toBeGreaterThan(35);
+    expect(b.maxLat).toBeLessThan(36);
+  });
+});
+
+describe("tilesCoveringBounds", () => {
+  it("市規模のbboxを少数タイルで覆う", () => {
+    const b = cityBounds("14205")!;
+    const tiles = tilesCoveringBounds(b);
+    expect(tiles.length).toBeGreaterThan(0);
+    expect(tiles.length).toBeLessThan(30);
   });
 });

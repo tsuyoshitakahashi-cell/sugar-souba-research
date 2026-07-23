@@ -17,20 +17,45 @@ export function lngLatToTile(lng: number, lat: number, z: number = TILE_ZOOM): T
   return { z, x, y };
 }
 
+const MAX_TILES = 30; // 異常に広いbboxで大量リクエストを送らないための安全弁
+
+function tilesInBBox(minLng: number, minLat: number, maxLng: number, maxLat: number, z: number): Tile[] {
+  const nw = lngLatToTile(minLng, maxLat, z);
+  const se = lngLatToTile(maxLng, minLat, z);
+  const tiles: Tile[] = [];
+  for (let x = nw.x; x <= se.x; x++) {
+    for (let y = nw.y; y <= se.y; y++) {
+      tiles.push({ z, x, y });
+      if (tiles.length >= MAX_TILES) return tiles;
+    }
+  }
+  return tiles;
+}
+
 // 中心座標＋半径(m)を覆うタイル群を列挙する
 export function tilesCoveringRadius(lng: number, lat: number, radiusMeters: number, z: number = TILE_ZOOM): Tile[] {
   // 緯度経度の度あたりメートル（概算）で半径をbboxに変換
   const dLat = radiusMeters / 111_320;
   const dLng = radiusMeters / (111_320 * Math.cos((lat * Math.PI) / 180));
-  const nw = lngLatToTile(lng - dLng, lat + dLat, z);
-  const se = lngLatToTile(lng + dLng, lat - dLat, z);
-  const tiles: Tile[] = [];
-  for (let x = nw.x; x <= se.x; x++) {
-    for (let y = nw.y; y <= se.y; y++) {
-      tiles.push({ z, x, y });
-    }
-  }
-  return tiles;
+  return tilesInBBox(lng - dLng, lat - dLat, lng + dLng, lat + dLat, z);
+}
+
+// 市区町村など矩形範囲（緯度経度bbox）を覆うタイル群を列挙する。少し余白(margin)を持たせる。
+export function tilesCoveringBounds(
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number },
+  z: number = TILE_ZOOM,
+  marginMeters = 500,
+): Tile[] {
+  const midLat = (bounds.minLat + bounds.maxLat) / 2;
+  const dLat = marginMeters / 111_320;
+  const dLng = marginMeters / (111_320 * Math.cos((midLat * Math.PI) / 180));
+  return tilesInBBox(
+    bounds.minLng - dLng,
+    bounds.minLat - dLat,
+    bounds.maxLng + dLng,
+    bounds.maxLat + dLat,
+    z,
+  );
 }
 
 // Haversine 距離（メートル）

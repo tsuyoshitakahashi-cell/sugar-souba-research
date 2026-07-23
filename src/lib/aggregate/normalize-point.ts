@@ -1,7 +1,8 @@
 import type { PointFeature } from "@/lib/reinfolib/points-client";
 import { bearingToDirection8, haversineMeters, metersToWalkMinutes } from "@/lib/reinfolib/tiles";
 import { findDistrictCentroid } from "@/lib/districts/lookup";
-import type { Deal } from "./normalize";
+import { findNearestStation } from "@/lib/stations/lookup";
+import { zenkakuToHankaku, type Deal } from "./normalize";
 
 // XPT001 の整形文字列パーサ。該当なし・端値は null。
 export function parseYenFromManStr(s: string): number | null {
@@ -29,13 +30,15 @@ export function parseYearStr(s: string): number | null {
 }
 
 // PointFeature を Deal へ正規化。
-// XPT001 の geometry 座標は「物件の最寄り駅の点」で物件位置ではないため使わない。
-// 距離・方角は駅座標 → 町丁目centroid（位置参照情報）で概算する。
-// centroid が引けない町丁目は walkMinutes/direction を undefined にする（route側で扱いを決める）。
+// XPT001 の geometry 座標は「物件の最寄り駅の点」で物件位置ではない。
+// - 全モード共通: geometry座標 → stations.json逆引きで「最寄駅名」を得て、
+//   最寄駅座標 → 町丁目centroid（位置参照情報）の距離を「最寄駅からの概算徒歩分」とする。
+// - 駅検索モードのみ: 検索した駅座標(searchStation) → 町丁目centroid の距離・方位を別途付与する
+//   （既存の walkMinutes/direction。検索駅が最寄駅と異なる場合もあるため区別する）。
+// centroid が引けない町丁目は距離系フィールドをすべて undefined にする。
 export function normalizePoint(
   feature: PointFeature,
-  stationLng: number,
-  stationLat: number,
+  searchStation?: { lng: number; lat: number },
 ): Deal | null {
   const p = feature.properties;
   const tradePrice = parseYenFromManStr(p.u_transaction_price_total_ja);
@@ -43,12 +46,26 @@ export function normalizePoint(
   if (tradePrice === null || area === null || area <= 0) return null;
 
   const centroid = findDistrictCentroid(p.city_code, p.district_name_ja);
+
   let walkMinutes: number | undefined;
   let direction: string | undefined;
+  let nearestStation: string | undefined;
+  let nearestStationWalk: number | undefined;
+
   if (centroid) {
     const [dLat, dLng] = centroid;
-    walkMinutes = metersToWalkMinutes(haversineMeters(stationLng, stationLat, dLng, dLat));
-    direction = bearingToDirection8(stationLng, stationLat, dLng, dLat);
+    if (searchStation) {
+      walkMinutes = metersToWalkMinutes(haversineMeters(searchStation.lng, searchStation.lat, dLng, dLat));
+      direction = bearingToDirection8(searchStation.lng, searchStation.lat, dLng, dLat);
+    }
+    const [nearestLng, nearestLat] = feature.geometry.coordinates;
+    const nearest = findNearestStation(nearestLng, nearestLat);
+    if (nearest) {
+      nearestStation = nearest.station.name;
+      nearestStationWalk = metersToWalkMinutes(
+        haversineMeters(nearest.station.lng, nearest.station.lat, dLng, dLat),
+      );
+    }
   }
 
   return {
@@ -61,24 +78,32 @@ export function normalizePoint(
     area,
     unitPrice: tradePrice / area,
     builtYear: parseYearStr(p.u_construction_year_ja),
-    floorPlan: p.floor_plan_name_ja,
-    structure: p.building_structure_name_ja,
+    floorPlan: zenkakuToHankaku(p.floor_plan_name_ja),
+    structure: zenkakuToHankaku(p.building_structure_name_ja),
     period: p.point_in_time_name_ja,
     walkMinutes,
     direction,
+    nearestStation,
+    nearestStationWalk,
   };
 }
 
 export interface PointFilter {
-  walkMaxMinutes: number;
+  walkMaxMinutes?: number; // 未指定なら徒歩で絞らない
   directions: string[]; // 空 = 全方位
+  // true: 検索駅からの距離(walkMinutes)で絞る（駅検索モード）
+  // false: 最寄駅からの距離(nearestStationWalk)で絞る（市区町村検索モード）
+  useSearchStationDistance: boolean;
 }
 
 export function filterByWalkAndDirection(deals: Deal[], f: PointFilter): Deal[] {
   return deals.filter((d) => {
-    // 町丁目centroidが引けず距離不明な物件は駅検索の対象から外す（概算でも位置づけられないため）
-    if (d.walkMinutes === undefined) return false;
-    if (d.walkMinutes > f.walkMaxMinutes) return false;
+    const minutes = f.useSearchStationDistance ? d.walkMinutes : d.nearestStationWalk;
+    if (f.walkMaxMinutes !== undefined) {
+      // 町丁目centroidが引けず距離不明な物件は、徒歩条件がある場合は除外する（概算でも位置づけられないため）
+      if (minutes === undefined) return false;
+      if (minutes > f.walkMaxMinutes) return false;
+    }
     if (f.directions.length > 0 && (!d.direction || !f.directions.includes(d.direction))) return false;
     return true;
   });
