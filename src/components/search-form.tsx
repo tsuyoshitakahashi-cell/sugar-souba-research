@@ -8,13 +8,18 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DEFAULT_PREF_CODE, PREFECTURES } from "@/lib/prefectures";
+import { groupKanagawaCities, type CityGroup } from "@/lib/kanagawa-cities";
 import type { SearchConditions } from "@/lib/search-types";
 import type { PropertyType } from "@/lib/reinfolib/types";
+
+// SUGAR様は神奈川県のみ対応
+const PREF_CODE = "14";
 
 interface StationHit {
   code: string;
@@ -60,8 +65,7 @@ export function SearchForm({
   const [station, setStation] = useState<StationHit | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [prefCode, setPrefCode] = useState(DEFAULT_PREF_CODE);
-  const [cityOptions, setCityOptions] = useState<{ id: string; name: string }[]>([]);
+  const [cityGroups, setCityGroups] = useState<CityGroup[]>([]);
   const [cityCode, setCityCode] = useState("");
 
   const [ageMin, setAgeMin] = useState(NONE);
@@ -115,11 +119,10 @@ export function SearchForm({
   }, [stationQuery, station]);
 
   useEffect(() => {
-    setCityCode("");
-    fetch(`/api/cities?pref=${prefCode}`)
+    fetch(`/api/cities?pref=${PREF_CODE}`)
       .then((r) => r.json())
-      .then((d) => setCityOptions(d.cities ?? []));
-  }, [prefCode]);
+      .then((d) => setCityGroups(groupKanagawaCities(d.cities ?? [])));
+  }, []);
 
   const isLand = propertyType === "land";
   const currentYear = new Date().getFullYear();
@@ -131,9 +134,12 @@ export function SearchForm({
       areaMode,
       stationCode: areaMode === "station" ? station?.code : undefined,
       stationLabel: areaMode === "station" ? station?.name : undefined,
-      prefCode: areaMode === "city" ? prefCode : undefined,
+      prefCode: areaMode === "city" ? PREF_CODE : undefined,
       cityCode: areaMode === "city" ? cityCode : undefined,
-      cityLabel: areaMode === "city" ? cityOptions.find((c) => c.id === cityCode)?.name : undefined,
+      cityLabel:
+        areaMode === "city"
+          ? cityGroups.flatMap((g) => g.cities).find((c) => c.id === cityCode)?.name
+          : undefined,
       propertyType,
       // 築N年〜M年 → 建築年レンジに変換（築が浅い=建築年が新しい）
       builtYearMin: !isLand && ageMax !== NONE ? currentYear - Number(ageMax) : undefined,
@@ -193,30 +199,26 @@ export function SearchForm({
                 )}
               </div>
             ) : (
-              <div className="flex gap-2">
-                <Select value={prefCode} onValueChange={(v) => v && setPrefCode(v)}>
-                  <SelectTrigger className="w-36">
-                    <SelectValue>{PREFECTURES.find((p) => p.code === prefCode)?.name}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PREFECTURES.map((p) => (
-                      <SelectItem key={p.code} value={p.code}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                  神奈川県
+                </span>
                 <Select value={cityCode} onValueChange={(v) => v && setCityCode(v)}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue placeholder="市区町村">
-                      {cityOptions.find((c) => c.id === cityCode)?.name ?? "市区町村"}
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder="市区町村を選ぶ">
+                      {cityGroups.flatMap((g) => g.cities).find((c) => c.id === cityCode)?.name ?? "市区町村を選ぶ"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {cityOptions.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
+                    {cityGroups.map((g) => (
+                      <SelectGroup key={g.label}>
+                        <SelectLabel>{g.label}</SelectLabel>
+                        {g.cities.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>
